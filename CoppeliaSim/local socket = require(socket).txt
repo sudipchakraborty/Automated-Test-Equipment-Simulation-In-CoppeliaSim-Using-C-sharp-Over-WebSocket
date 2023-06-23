@@ -1,0 +1,136 @@
+local socket = require("socket")
+local server = assert(socket.bind("*", 6000))
+local tcp = assert(socket.tcp())
+----------------------------------------------------------------------------------------------------------------
+function sysCall_init()
+
+    pos={0.1,0.1,0.1}
+    target=sim.getObjectHandle('target')
+    
+    J1=sim.getObjectHandle('J1')
+    J2=sim.getObjectHandle('J2')
+    J3=sim.getObjectHandle('J3')
+    J4=sim.getObjectHandle('J4')
+    J5=sim.getObjectHandle('J5')
+    
+    EF_Left_Motor=sim.getObjectHandle('EF_Left_Motor')
+    EF_Right_Motor=sim.getObjectHandle('EF_Right_Motor')
+    
+    
+    ik1=sim.getIkGroupHandle('ud')
+    ik2=sim.getIkGroupHandle('dmp')
+    
+end
+------------------------------------------------------------------------------------------------------------
+function sysCall_actuation()
+         
+    local client = server:accept()
+    client:settimeout(10)
+    local packet, err = client:receive()
+  
+     if not err then
+      --  print("received from client=",packet)
+        cmd=string.sub(packet, 2,3)        
+        if string.find(cmd, "IK") then
+           purse_IK_Packet(packet)
+           pkt=Get_Transmit_Packet()
+           pkt=pkt.."\n"
+        --   print("pkt=",pkt)
+           client:send(pkt) 
+       else
+       print("error")
+        end
+     end
+     client:close()
+     Trigger_IK()
+end 
+-------------------------------------------------------------------------------------------------------------  
+function sysCall_sensing()
+end
+-------------------------------------------------------------------------------------------------------------  
+function sysCall_cleanup()
+end
+-------------------------------------------------------------------------------------------------------------  
+function purse_IK_Packet(packet)
+
+    --  <IK#TX=0,TY=0,TZ=0,RX=0,RY=0,RZ=0,>
+    
+     i= string.find(packet, "TX=")
+     j= string.find(packet, ",TY=")
+     tx=string.sub(packet, i+3,j-1)   
+     -------------------------------
+     i= string.find(packet, "TY=")
+     j= string.find(packet, ",TZ=")
+     ty=string.sub(packet, i+3,j-1) 
+     -------------------------------
+     i= string.find(packet, "TZ=")
+     j= string.find(packet, ",RX=")
+     tz=string.sub(packet, i+3,j-1)   
+     -------------------------------
+     i= string.find(packet, "RX=")
+     j= string.find(packet, ",RY=")
+     rx=string.sub(packet, i+3,j-1)   
+     -------------------------------
+     i= string.find(packet, "RY=")
+     j= string.find(packet, ",RZ=")
+     ry=string.sub(packet, i+3,j-1)   
+     -------------------------------
+     i= string.find(packet, "RZ=")
+     j= string.find(packet, ">")
+     rz=string.sub(packet, i+3,j-1)   
+     -------------------------------
+     i= string.find(packet, "LG=")
+     j= string.find(packet, ",RG=")
+     left_gripper=string.sub(packet, i+3,j-1)   
+     -------------------------------
+     i= string.find(packet, "RG=")
+     j= string.find(packet, ">")
+     right_gripper=string.sub(packet, i+3,j-1) 
+     ------------------------------
+     m=sim.getObjectMatrix(target,-1)
+     m[4]=tonumber(tx)
+     m[8]=tonumber(ty)
+     m[12]=tonumber(tz)
+     sim.setObjectMatrix(target,-1,m)
+     -------------------------------
+    sim.setJointPosition(EF_Right_Motor,tonumber(left_gripper)) -- 0 to -0.05
+    sim.setJointPosition(EF_Left_Motor,right_gripper)      -- 0-0.05
+end
+---------------------------------------------------------------------------------------------------------------
+function Get_Transmit_Packet()
+    rad_J1=sim.getJointPosition(J1)
+    rad_J2=sim.getJointPosition(J2)
+    rad_J3=sim.getJointPosition(J3)
+    rad_J4=sim.getJointPosition(J4)
+    rad_J5=sim.getJointPosition(J5)
+   
+    deg_J1=rad_J1* 180.0/math.pi
+    deg_J2=rad_J2* 180.0/math.pi
+    deg_J3=rad_J3* 180.0/math.pi
+    deg_J4=rad_J4* 180.0/math.pi
+    deg_J5=rad_J5* 180.0/math.pi
+    
+    pkt="<".."J1="..deg_J1..","
+    pkt=pkt.."J2="..deg_J2..","
+    pkt=pkt.."J3="..deg_J3..","
+    pkt=pkt.."J4="..deg_J4..","
+    pkt=pkt.."J5="..deg_J5..">"
+    return pkt
+end
+--------------------------------------------------------------------------------------------------------------
+function Trigger_IK()
+      if(sim.handleIkGroup(ik1)==sim.ikresult_fail) then
+           sim.handleIkGroup(ik2) 
+          if(ikFailedReportHandle==-1) then  
+           print("IK2 fail")
+          else
+        end
+    else
+    print("IK success")
+    end
+end
+--------------------------------------------------------------------------------------------------------------
+
+
+
+
